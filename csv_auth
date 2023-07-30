@@ -7,11 +7,22 @@ use warnings;
 use parent 'CGI::Session::Auth';
 use Text::CSV;
 use Cwd qw(getcwd);
-# Override the _check_login method to use a CSV file
+
+# Need to override new()
+sub new {
+    my $class = shift;
+    my ($params) = shift;
+    $class = ref($class) if ref($class);
+    # initialize parent class
+    my $self = $class->SUPER::new($params);
+    bless($self, $class);
+    return $self;
+}
+
+# Override the _login method to use a CSV file
 sub _login {
     my $self = shift;
-    my $user = $self->user;
-    my $pass = $self->pass;
+    my ($user, $pass) = @_;
 
     my $cwd = getcwd;
     # Open the CSV file
@@ -40,7 +51,7 @@ use CGI("-utf8");
 use CGI::Carp qw(fatalsToBrowser);
 use CGI::Cookie;
 use CGI::Session;
-use CGI::Session::Auth;
+#use CGI::Session::Auth;
 use utf8;
 
 # CGI object for headers, cookies, etc.
@@ -50,35 +61,23 @@ my $log_username = $cgi->param("log_username");
 my $log_password = $cgi->param("log_password");
 
 # CGI::Session object for session handling
-my $session = CGI::Session->new(undef, $cgi, {Directory=>"/tmp"});
+my $session = CGI::Session->new(undef, $cgi, {Directory=>"/tmp/csvauth"});
 my $cookie = $cgi->cookie( -name   => $session->name,
                            -value  => $session->id );
 print $cgi->header( -cookie=>$cookie );
-
 # CGI::Session::Auth object for authentication
 my $auth = CGI::Session::Auth::CSV->new({CGI => $cgi, Session => $session});
 $auth->authenticate();
 
 # check if visitor has already logged in
 if ($auth->loggedIn) {
-     show_main_page();
-     my $log_password_encripted = CGI::Session::Auth::_encpw($log_password);
-     print "Content-type: text/html\n\n";
-     print "<!DOCTYPE html>\n";
-     print "<html>\n";
-     print "<h3>HELLO LOGGEDIN $log_username $log_password_encripted</h3>\n";
-     print "</html>\n";
+    print "<!DOCTYPE html>\n";
+    print "<html>\n";
+    print "<h3>Hello you are logged in $log_username</h3>\n";
+    print "</html>\n";
 }
 else {
-  show_login_page();
-}
-
-sub show_main_page {
-  #print "Content-type: text/html\n\n";
-  #print "<!DOCTYPE html>\n";
-  #print "<html>\n";
-  #print "<h3>HELLO LOGGEDIN</h3>\n";
-  #print "</html>\n";
+    print show_login_page();
 }
 
 sub show_login_page {
@@ -90,7 +89,7 @@ sub show_login_page {
 <body>
 <h1>You are not logged in</h1>
 <p>Please log in to see the secret page:</p>
-<form action="auth1" method="POST">
+<form action="csv_auth" method="POST">
 <input type="hidden" name="cmd" value="secret">
 <p><input type="text" size="30" name="log_username" value="username"></p>
 <p><input type="text" size="30" name="log_password" value="password"></p>
