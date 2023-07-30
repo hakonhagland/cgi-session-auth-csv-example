@@ -1,0 +1,102 @@
+#! /usr/bin/perl
+
+# MyAuth.pm
+package CGI::Session::Auth::CSV;
+use strict;
+use warnings;
+use parent 'CGI::Session::Auth';
+use Text::CSV;
+use Cwd qw(getcwd);
+# Override the _check_login method to use a CSV file
+sub _login {
+    my $self = shift;
+    my $user = $self->user;
+    my $pass = $self->pass;
+
+    my $cwd = getcwd;
+    # Open the CSV file
+    my $csv = Text::CSV->new;
+    open my $fh, "<", "login.csv" or die "Can't open login.csv: $! : cwd = $cwd";
+
+    # Loop through the rows and check for a match
+    while (my $row = $csv->getline($fh)) {
+        if ($row->[0] eq $user and $row->[1] eq $pass) {
+            # Found a match, return true
+            close $fh;
+            return 1;
+        }
+    }
+
+    # No match, return false
+    close $fh;
+    return 0;
+}
+
+package main;
+use feature qw(say);
+use strict;
+use warnings;
+use CGI("-utf8");
+use CGI::Carp qw(fatalsToBrowser);
+use CGI::Cookie;
+use CGI::Session;
+use CGI::Session::Auth;
+use utf8;
+
+# CGI object for headers, cookies, etc.
+my $cgi = CGI->new();
+
+my $log_username = $cgi->param("log_username");
+my $log_password = $cgi->param("log_password");
+
+# CGI::Session object for session handling
+my $session = CGI::Session->new(undef, $cgi, {Directory=>"/tmp"});
+my $cookie = $cgi->cookie( -name   => $session->name,
+                           -value  => $session->id );
+print $cgi->header( -cookie=>$cookie );
+
+# CGI::Session::Auth object for authentication
+my $auth = CGI::Session::Auth::CSV->new({CGI => $cgi, Session => $session});
+$auth->authenticate();
+
+# check if visitor has already logged in
+if ($auth->loggedIn) {
+     show_main_page();
+     my $log_password_encripted = CGI::Session::Auth::_encpw($log_password);
+     print "Content-type: text/html\n\n";
+     print "<!DOCTYPE html>\n";
+     print "<html>\n";
+     print "<h3>HELLO LOGGEDIN $log_username $log_password_encripted</h3>\n";
+     print "</html>\n";
+}
+else {
+  show_login_page();
+}
+
+sub show_main_page {
+  #print "Content-type: text/html\n\n";
+  #print "<!DOCTYPE html>\n";
+  #print "<html>\n";
+  #print "<h3>HELLO LOGGEDIN</h3>\n";
+  #print "</html>\n";
+}
+
+sub show_login_page {
+	my $self = shift;
+
+	return <<HTML;
+<html>
+<head><title>Not logged in</title></head>
+<body>
+<h1>You are not logged in</h1>
+<p>Please log in to see the secret page:</p>
+<form action="auth1" method="POST">
+<input type="hidden" name="cmd" value="secret">
+<p><input type="text" size="30" name="log_username" value="username"></p>
+<p><input type="text" size="30" name="log_password" value="password"></p>
+<p><input type="submit"></p>
+</form>
+</body>
+</html>
+HTML
+}
