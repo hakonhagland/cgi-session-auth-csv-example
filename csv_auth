@@ -36,7 +36,7 @@ sub new {
 sub _login {
     my $self = shift;
     my ($user, $pass) = @_;
-
+    $self->{username} = $user;
     Logger::debug('CGI::Session::Auth::CSV::_login() called');
     my $csv = Text::CSV->new;
     open my $fh, "<", "login.csv" or die "Can't open login.csv: $!";
@@ -63,37 +63,62 @@ use CGI::Carp qw(fatalsToBrowser);
 use CGI::Cookie;
 use CGI::Session;
 #use CGI::Session::Auth;
+use Data::Dumper qw(Dumper);
 use utf8;
 
 # CGI object for headers, cookies, etc.
 my $cgi = CGI->new();
 
-my $log_username = $cgi->param("log_username");
-my $log_password = $cgi->param("log_password");
-Logger::debug("cgiscript: csv_auth : query parameters: username: $log_username, password: $log_password");
+my $user = $cgi->param("log_username");
+my $password = $cgi->param("log_password");
+my $cmd = $cgi->param("cmd");
+
+my %cgi_vars = $cgi->Vars;
+Logger::debug("cgiscript: csv_auth : query parameters: " . Dumper(\%cgi_vars));
+Logger::debug("cgiscript: csv_auth : cookies: " . (join ",", $cgi->cookie()));
+Logger::debug("cgiscript: csv_auth : cookie: CGISESSID : " . Dumper($cgi->cookie('CGISESSID')));
 
 # CGI::Session object for session handling
 my $session = CGI::Session->new(undef, $cgi, {Directory=>"/tmp/csvauth"});
+Logger::debug("cgiscript: csv_auth : session = " . $session->dump());
+my $session_params = $session->dataref();
+Logger::debug("cgiscript: csv_auth : session data : " . Dumper($session_params));
+if (defined $user) {
+    $session->param("username", $user);
+    $session->flush();
+}
+else {
+    $user = $session->param("username");
+}
 my $cookie = $cgi->cookie( -name   => $session->name,
                            -value  => $session->id );
 print $cgi->header( -cookie=>$cookie );
 # CGI::Session::Auth object for authentication
 my $auth = CGI::Session::Auth::CSV->new({CGI => $cgi, Session => $session});
+Logger::debug("cgiscript: csv_auth : auth object 1 : " . Dumper($auth));
 Logger::debug("cgiscript: csv_auth : calling authenticate");
 $auth->authenticate();
+Logger::debug("cgiscript: csv_auth : auth object 2 : " . Dumper($auth));
+if ($cmd eq "logout") {
+    logout($auth, $user);
+    exit;
+}
 
 # check if visitor has already logged in
 if ($auth->loggedIn) {
     Logger::debug("cgiscript: csv_auth : user is logged in");
     print "<!DOCTYPE html>\n";
     print "<html>\n";
-    print "<h3>Hello you are logged in $log_username</h3>\n";
+    print "<h3>Hello you are logged in $user</h3>\n";
+    print '<p><a href="csv_auth?cmd=logout">Log out</a></p>';
     print "</html>\n";
 }
 else {
     Logger::debug("cgiscript: csv_auth : user is not logged in");
     print show_login_page();
 }
+$session->flush();
+
 
 sub show_login_page {
 	my $self = shift;
@@ -105,7 +130,27 @@ sub show_login_page {
 <h1>You are not logged in</h1>
 <p>Please log in to see the secret page:</p>
 <form action="csv_auth" method="POST">
-<input type="hidden" name="cmd" value="secret">
+<p><input type="text" size="30" name="log_username" value="username"></p>
+<p><input type="text" size="30" name="log_password" value="password"></p>
+<p><input type="submit"></p>
+</form>
+</body>
+</html>
+HTML
+}
+
+sub logout {
+    my ($auth, $user) = @_;
+
+	$auth->logout();
+
+	print <<"HTML";
+<html>
+<head><title>Logged out</title></head>
+<body>
+<h1>You have logged out user $user.</h1>
+<p>Please log in to see the secret page:</p>
+<form action="csv_auth" method="POST">
 <p><input type="text" size="30" name="log_username" value="username"></p>
 <p><input type="text" size="30" name="log_password" value="password"></p>
 <p><input type="submit"></p>
