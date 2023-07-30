@@ -1,12 +1,10 @@
 #! /usr/bin/perl
 
-# MyAuth.pm
 package CGI::Session::Auth::CSV;
 use strict;
 use warnings;
 use parent 'CGI::Session::Auth';
 use Text::CSV;
-use Cwd qw(getcwd);
 
 # Need to override new()
 sub new {
@@ -24,11 +22,8 @@ sub _login {
     my $self = shift;
     my ($user, $pass) = @_;
 
-    my $cwd = getcwd;
-    # Open the CSV file
     my $csv = Text::CSV->new;
-    open my $fh, "<", "login.csv" or die "Can't open login.csv: $! : cwd = $cwd";
-
+    open my $fh, "<", "login.csv" or die "Can't open login.csv: $!";
     # Loop through the rows and check for a match
     while (my $row = $csv->getline($fh)) {
         if ($row->[0] eq $user and $row->[1] eq $pass) {
@@ -37,7 +32,6 @@ sub _login {
             return 1;
         }
     }
-
     # No match, return false
     close $fh;
     return 0;
