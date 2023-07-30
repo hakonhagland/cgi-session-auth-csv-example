@@ -1,5 +1,19 @@
 #! /usr/bin/perl
 
+package Logger;
+use strict;
+use warnings;
+use POSIX qw( strftime );
+
+sub debug {
+    my $msg = shift;
+
+    my $fn = '/tmp/csv_auth_log.txt';
+    open (my $fh, ">>", $fn) or die "Could not open file '$fn': $!";
+    my $timestamp = strftime("%Y-%m-%d %H:%M:%S", localtime);
+    say $fh "$timestamp : $msg";
+}
+
 package CGI::Session::Auth::CSV;
 use strict;
 use warnings;
@@ -10,6 +24,7 @@ use Text::CSV;
 sub new {
     my $class = shift;
     my ($params) = shift;
+    Logger::debug('CGI::Session::Auth::CSV::new() called');
     $class = ref($class) if ref($class);
     # initialize parent class
     my $self = $class->SUPER::new($params);
@@ -22,6 +37,7 @@ sub _login {
     my $self = shift;
     my ($user, $pass) = @_;
 
+    Logger::debug('CGI::Session::Auth::CSV::_login() called');
     my $csv = Text::CSV->new;
     open my $fh, "<", "login.csv" or die "Can't open login.csv: $!";
     # Loop through the rows and check for a match
@@ -29,6 +45,7 @@ sub _login {
         if ($row->[0] eq $user and $row->[1] eq $pass) {
             # Found a match, return true
             close $fh;
+            Logger::debug("CGI::Session::Auth::CSV::_login() : found match for username: $user");
             return 1;
         }
     }
@@ -53,6 +70,7 @@ my $cgi = CGI->new();
 
 my $log_username = $cgi->param("log_username");
 my $log_password = $cgi->param("log_password");
+Logger::debug("cgiscript: csv_auth : query parameters: username: $log_username, password: $log_password");
 
 # CGI::Session object for session handling
 my $session = CGI::Session->new(undef, $cgi, {Directory=>"/tmp/csvauth"});
@@ -61,16 +79,19 @@ my $cookie = $cgi->cookie( -name   => $session->name,
 print $cgi->header( -cookie=>$cookie );
 # CGI::Session::Auth object for authentication
 my $auth = CGI::Session::Auth::CSV->new({CGI => $cgi, Session => $session});
+Logger::debug("cgiscript: csv_auth : calling authenticate");
 $auth->authenticate();
 
 # check if visitor has already logged in
 if ($auth->loggedIn) {
+    Logger::debug("cgiscript: csv_auth : user is logged in");
     print "<!DOCTYPE html>\n";
     print "<html>\n";
     print "<h3>Hello you are logged in $log_username</h3>\n";
     print "</html>\n";
 }
 else {
+    Logger::debug("cgiscript: csv_auth : user is not logged in");
     print show_login_page();
 }
 
